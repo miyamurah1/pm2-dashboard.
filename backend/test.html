@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>PM2 Dashboard Test</title>
+</head>
+<body>
+  <button onclick="login()">Login</button>
+  <button onclick="testWS()">Test WebSocket</button>
+  <pre id="output"></pre>
+
+  <script>
+    function log(data) {
+      document.getElementById('output').textContent += 
+        JSON.stringify(data, null, 2) + '\n\n'
+    }
+
+    async function login() {
+      const res = await fetch('/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ 
+          username: 'admin', 
+          password: 'admin123' 
+        })
+      })
+      const data = await res.json()
+      log(data)
+    }
+
+    function testWS() {
+  const ws = new WebSocket('ws://localhost:3000/ws')
+  ws.onopen = () => log({ status: 'WebSocket connected' })
+  ws.onmessage = (e) => log(JSON.parse(e.data))
+  ws.onclose = (e) => log({ status: 'closed', code: e.code, reason: e.reason })
+  ws.onerror = (e) => log({ status: 'error', message: e.message })
+}
+  </script>
+</body>
+</html>
