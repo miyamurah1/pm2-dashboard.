@@ -18,9 +18,6 @@ function getProcessList() {
   })
 }
 
-// ── Control functions ─────────────────────────────────────────────────────
-// Each wraps pm2's callback API in a Promise so we can use async/await
-
 function restartProcess(name) {
   return new Promise((resolve, reject) => {
     pm2.restart(name, (err) => {
@@ -41,24 +38,26 @@ function stopProcess(name) {
 
 function startProcess(name) {
   return new Promise((resolve, reject) => {
-    pm2.start(name, (err) => {
+    pm2.restart(name, (err) => {
       if (err) reject(err)
       else resolve()
     })
   })
 }
 
-// ── PM2 event name → frontend status string ───────────────────────────────
+// ── Key fix: instead of mapping events → status ourselves,
+// we fetch the real status directly from PM2 after each event.
+// This is 100% accurate because it reads pm2_env.status directly.
 function toStatus(pmEvent) {
   const map = {
     'online':   'online',
-    'start':    'launching',
-    'restart':  'launching',
+    'start':    'online',    // ← was 'launching', caused stuck state
+    'restart':  'online',    // ← was 'launching', caused stuck state
     'stop':     'stopped',
     'exit':     'stopped',
     'stopping': 'stopping',
     'error':    'errored',
-    'launch':   'launching',
+    'launch':   'launching', // only true launching event
   }
   return map[pmEvent] ?? pmEvent
 }
@@ -71,11 +70,16 @@ function watchEvents(onEvent) {
     }
 
     bus.on('process:event', (event) => {
-      onEvent({
-        type: 'process_event',
-        process: event.process.name,
-        status: toStatus(event.event),
-        at: Date.now()
+      // After any event, fetch the real status from PM2
+      // instead of guessing from the event name
+      pm2.describe(event.process.name, (err, list) => {
+        const realStatus = list?.[0]?.pm2_env?.status ?? toStatus(event.event)
+        onEvent({
+          type: 'process_event',
+          process: event.process.name,
+          status: realStatus,
+          at: Date.now()
+        })
       })
     })
 
